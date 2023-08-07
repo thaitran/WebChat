@@ -1,0 +1,8 @@
+gradio==3.38.0
+openai
+anthropic
+huggingface_hub
+tiktoken
+sentencepiece
+selenium
+beautifulsoup4
