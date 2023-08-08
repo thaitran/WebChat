@@ -1,0 +1,24 @@
+verbose: False
+
+examples:
+- Is it possible to build a room temperature superconductor?
+- Should I go to the beach in Santa Cruz tomorrow?
+- What is the cause of the conflict between Zuck and Elon?
+- Summarize today's nytimes.com headlines
+
+enabled_models:
+- LLaMA 2
+- GPT-3.5
+- GPT-4
+- Claude 2
+
+enabled_browsers:
+- Headless
+- Chrome
+- Firefox
+- Safari
+- Edge
+
+temperature: 0.1
+
+max_actions: 10

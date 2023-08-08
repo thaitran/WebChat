@@ -1,23 +1,12 @@
 import re
 import datetime
 import gradio as gr
+import yaml
 
 from models import OpenAIModel, AnthropicModel, HuggingFaceLlama2Model
-from tools import tools_prompt, run_tool
+from tools import Tools
 
-verbose = False
-
-MAX_ACTIONS = 10   # Max number of actions we'll execute for each question
 SYSTEM_MESSAGE_TEMPLATE = "prompt.txt"
-
-EXAMPLES = [
-    "How much can I earn on $10k in savings this year?",
-    "Find a coffeeshop halfway between Burlingame and Palo Alto",
-    "Should I go to the beach in Santa Cruz tomorrow?",
-    "Who are the top 5 contenders for the Republican presidential nomination?",
-    "What is the cause of the conflict between Zuck and Elon?",
-    "Summarize today's NYT headlines",
-]
 
 MODELS = {
     "LLaMA 2": HuggingFaceLlama2Model("meta-llama/Llama-2-70b-chat-hf", 4096),
@@ -26,8 +15,27 @@ MODELS = {
     "Claude 2": AnthropicModel("claude-2", 100000),
 }
 
-selected_model_name = "LLaMA 2"
-temperature = 0.1
+# Load configuration from config.yaml.
+#   verbose: should output the prompts to stdout
+#   examples: list of example questions
+#   enabled_models: list of models to enable (names must be in MODELS)
+#   enabled_browsers:  list of browsers to support
+#   temperature: default temperature for LLM
+#   max_actions: maximun number of actions to attempt before aborting
+
+with open("config.yaml", "r") as config_file:
+    config = yaml.safe_load(config_file)
+
+verbose = config["verbose"]
+examples = config["examples"]
+enabled_models = config["enabled_models"]
+selected_model = enabled_models[0]
+enabled_browsers = config["enabled_browsers"]
+selected_browser = enabled_browsers[0]
+temperature = config["temperature"]
+max_actions = config["max_actions"]
+
+llm_tools = Tools(browser=selected_browser)
 
 def create_system_message():
     """
@@ -40,7 +48,7 @@ def create_system_message():
     current_date = now.strftime("%B %d, %Y")
 
     message = message.replace("{{CURRENT_DATE}}", current_date)
-    message = message.replace("{{TOOLS_PROMPT}}", tools_prompt())
+    message = message.replace("{{TOOLS_PROMPT}}", llm_tools.get_prompt())
 
     return message
 
@@ -77,14 +85,15 @@ def generate(new_user_message, history):
 
     iteration = 1
 
-    model = MODELS[selected_model_name]
+    model = MODELS[selected_model]
     system_message_token_count = model.count_tokens(system_message)
 
     try:
         while True:
             if verbose:
-                print("=" * 60)
-                print("PROMPT:")
+                print("======")
+                print("PROMPT")
+                print("======")
                 print(prompt)
 
             stream = model.generate(
@@ -113,7 +122,7 @@ def generate(new_user_message, history):
                         tool = matches.group(2).strip()
                         params = matches.group(3).strip()
                         
-                        result = run_tool(tool, params)
+                        result = llm_tools.run_tool(tool, params)
 
                         prompt = f"Question: {new_user_message}\n\n"
                         prompt += f"{full_response}\n\n"
@@ -151,9 +160,9 @@ def generate(new_user_message, history):
                 full_response += "\n\n"
                 yield full_response
             
-            # Stop when we've exceeded MAX_ACTIONS
-            if iteration >= MAX_ACTIONS:
-                full_response += f"Stopping after running {MAX_ACTIONS} actions."
+            # Stop when we've exceeded max_actions
+            if iteration >= max_actions:
+                full_response += f"Stopping after running {max_actions} actions."
                 yield full_response
                 return
             else:
@@ -167,10 +176,10 @@ def generate(new_user_message, history):
 # Create Gradio app
 system_message = create_system_message()
 if verbose:
-    print("=" * 60)
-    print("SYSTEM MESSAGE:")
+    print("==============")
+    print("SYSTEM MESSAGE")
+    print("==============")
     print(system_message)
-    print("=" * 60)
 
 CSS = """
 .contain { display: flex; flex-direction: column; }
@@ -179,23 +188,38 @@ CSS = """
 #chatbot { flex-grow: 1; overflow: auto; }
 """
 
+multiple_models_enabled = len(enabled_models) > 1
+multiple_browsers_enabled = len(enabled_browsers) > 1
+
 with gr.Blocks(css=CSS) as app:
-    chatinterface = gr.ChatInterface(fn=generate, examples=EXAMPLES)
+    chatinterface = gr.ChatInterface(fn=generate, examples=examples)
     chatinterface.chatbot.elem_id = "chatbot"
 
-    with gr.Row():
-        model_selector = gr.Radio(label="Model", choices=list(MODELS.keys()), value=selected_model_name)
-        temperature_slider = gr.Slider(label="Temperature", minimum=0, maximum=1, value=temperature)
+    with gr.Accordion(label="Options", open=multiple_models_enabled):
+        with gr.Row():
+            # Show model selector if there are multiple models enabled
+            model_selector = gr.Radio(label="Model", choices=enabled_models, value=selected_model, visible=multiple_models_enabled)
 
-    def change_model(new_model_name):
-        global selected_model_name
-        selected_model_name = new_model_name
+            # Show web browser selector if Selenium is enabled
+            browser_selector = gr.Radio(label="Web Browser", choices=enabled_browsers, value=selected_browser, visible=multiple_browsers_enabled)
+
+            temperature_slider = gr.Slider(label="Temperature", minimum=0.1, maximum=1, step=0.1, value=temperature)
+
+    def change_model(new_model):
+        global selected_model
+        selected_model = new_model
+
+    def change_browser(new_browser):
+        global selected_browser, llm_tools
+        selected_browser = new_browser
+        llm_tools.set_browser(selected_browser)
 
     def change_temperature(new_temperature):
         global temperature
         temperature = new_temperature
 
     model_selector.change(fn=change_model, inputs=model_selector)
+    browser_selector.change(fn=change_browser, inputs=browser_selector)
     temperature_slider.change(fn=change_temperature, inputs=temperature_slider)
 
 app.queue().launch(debug=True, share=False)
