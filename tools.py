@@ -18,36 +18,43 @@ class Tools:
 
         self.set_browser(browser)
 
-        self.add_tool(self.calculate)
-        self.add_tool(self.google_search)
-        self.add_tool(self.get_web_page)
+        self.add_tool(
+            self.calculate,
+            "Calculate",
+            "Evaluate a mathematical expression using Python.  Expression should only contain numbers, operators (+ - * / **), or math module functions.",
+            None)
 
-    def add_tool(self, func):
+        self.add_tool(
+            self.google_search,
+            "GoogleSearch",
+            "Use Google to search the web for the topic.",
+            "I will scan the Google search results and determine whether it shows me the answer or whether I need to fetch one of the web pages for more information.")
+
+        self.add_tool(
+            self.get_web_page,
+            "GetWebPage",
+            "Get the contents of a web page. Only call this with a valid URL.",
+            "I will scan the web page to determine whether it has the answer.  If not, then I will do another Google search and try loading a different web page.")
+
+    def add_tool(self, func, name, desc, next_thought=None):
         """
         Adds a Python function as an available tool for the LLM.
-
-        The tool name is converted from the Python convention to UpperCaseCamelCase.
-        For example: google_search => GoogleSearch
-
-        The tool description is taken from the function's docstring.
+        The tool name and desc will be included in the LLM system message.
+        The optional next_thought is intented to be appenending to the prompt after
+        the results from the tool.  This is necessary to give more explicit
+        guidance to LLMs like LLaMA 2.
         """
-        def transform_tool_name(name):
-            words = name.split("_")
-            return "".join(word.capitalize() for word in words)
-
-        tool_name = transform_tool_name(func.__name__)
-        tool_desc = func.__doc__.strip()
-
         params = inspect.signature(func).parameters
         tool_params = list(params.keys())
 
-        self.tools[tool_name] = {
+        self.tools[name] = {
             "params": tool_params,
-            "desc": tool_desc,
-            "func": func
+            "desc": desc,
+            "func": func,
+            "next_thought": next_thought
         }
 
-    def get_prompt(self):
+    def get_tool_list_for_prompt(self):
         """
         Returns a string of all the available tools for inclusion in the system
         prompt sent to the LLM.  For example:
@@ -65,17 +72,20 @@ class Tools:
 
     def run_tool(self, name, params):
         """
-        Runs a tool and returns the result.
+        Runs a tool. Returns the result of the tool and (optionally) a
+        Thought to be appened to the LLM prompt after the Results.
         """
         if not name in self.tools:
             return f"{name}[] is not a valid tool"
     
+        tool = self.tools[name]
+
         # The LLM sometimes puts double quotes around the param
         params = params.strip('"')
 
-        result = self.tools[name]["func"](params)
+        result = tool["func"](params)
 
-        return result
+        return (result, tool["next_thought"])
 
     def set_browser(self, browser):
         """
@@ -120,6 +130,7 @@ class Tools:
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
             }
             response = requests.get(url, headers=headers)
+
             return response.text
 
         else:
@@ -136,8 +147,9 @@ class Tools:
             return self.webdriver.page_source
 
     def calculate(self, expression):
-        """Evaluate a mathematical expression using Python.  Expression should only contain numbers, operators (+ - * / **), or math module functions."""
-
+        """
+        Tool for evaluating mathmatical expressions
+        """
         expression = expression.replace("^", "**")  # The LLM sometimes uses ^ for exponentation. Replace this operator with **
 
         try:
@@ -146,8 +158,10 @@ class Tools:
             return "That was not a valid expression"
 
     def google_search(self, topic):
-        """Use Google to search the web for the topic."""
-
+        """
+        Tool for using Google to search the web.
+        Returns distilled HTML of Google search results with links included.
+        """
         full_html = self.get_url("https://www.google.com/search?q=" + urllib.parse.quote(topic))
 
         html = distill_html(full_html)
@@ -189,7 +203,10 @@ class Tools:
         return html
 
     def get_web_page(self, url):
-        """Get the contents of a web page. Only call this with a valid URL."""
+        """
+        Tool for getting the contents of a web page.
+        Returns distilled HTML with all links removed.
+        """
         try:
             full_html = self.get_url(url)
             return distill_html(full_html, remove_links=True)
@@ -230,14 +247,14 @@ def distill_html(raw_html, remove_links=False):
         'g-popup', 'g-radio-button-group', 'g-right-button', 
         'g-scrolling-carousel', 'g-snackbar', 'g-white-loading-icon',
         'google-read-aloud-player', 'head', 'hr', 'iframe', 'img', 'input', 
-        'label', 'link', 'meta', 'nav', 'next-route-announcer', 'noscript', 
+        'label', 'link', 'nav', 'next-route-announcer', 'noscript', 
         'option', 'promo-throttler', 'script', 'select', 'style', 'svg'
     ]
     valid_attrs = ['href']
 
     # Remove all unwanted tags
-    for script in soup(remove_tags):
-        script.decompose()
+    for tag in soup(remove_tags):
+        tag.decompose()
 
     # Remove all unwanted attributes
     for tag in soup():

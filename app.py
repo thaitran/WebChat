@@ -48,7 +48,7 @@ def create_system_message():
     current_date = now.strftime("%B %d, %Y")
 
     message = message.replace("{{CURRENT_DATE}}", current_date)
-    message = message.replace("{{TOOLS_PROMPT}}", llm_tools.get_prompt())
+    message = message.replace("{{TOOLS_PROMPT}}", llm_tools.get_tool_list_for_prompt())
 
     return message
 
@@ -73,7 +73,7 @@ def generate(new_user_message, history):
     try to send a large number of tokens, so unfortuantely I use the same logic
     with Claude 2 as the other models.
     """
-    ACTION_REGEX = r'(\n|^)Action: (.*)\[(.*)\](\n|$)'
+    ACTION_REGEX = r'(\n|^)Action: (.*)\[(.*)\]'
     CONCLUSION_REGEX = r'(\n|^)Conclusion: .*'
 
     prompt = f"Question: {new_user_message}\n\n"
@@ -122,7 +122,7 @@ def generate(new_user_message, history):
                         tool = matches.group(2).strip()
                         params = matches.group(3).strip()
                         
-                        result = llm_tools.run_tool(tool, params)
+                        (result, next_thought) = llm_tools.run_tool(tool, params)
 
                         prompt = f"Question: {new_user_message}\n\n"
                         prompt += f"{full_response}\n\n"
@@ -137,7 +137,7 @@ def generate(new_user_message, history):
                         prompt_token_count = model.count_tokens(prompt)
                         result_token_count = model.count_tokens(result)
 
-                        available_tokens = int(0.8 * (model.context_size - system_message_token_count - history_token_count - prompt_token_count))
+                        available_tokens = int(0.9 * (model.context_size - system_message_token_count - history_token_count - prompt_token_count))
 
                         # Truncate the result if it is longer than the available tokens
                         if result_token_count > available_tokens:
@@ -145,10 +145,16 @@ def generate(new_user_message, history):
                             truncate_result_len = int(len(result) * ratio)
                             result = result[:truncate_result_len]
 
-                            full_response += f"\n\n*Note:  Only {ratio*100:.0f}% of the result was shown to the model due to context size limits.*"
+                            full_response += f"\n\n<span style='color:gray'>*Note:  Only {ratio*100:.0f}% of the result was shown to the model due to context window limits.*</span>\n\n"
                             yield full_response
 
                         prompt += f"Result: {result}\n\n"
+
+                        # This is required to give more guidance on the next
+                        # step for LLMs like LLaMA 2
+                        if next_thought:
+                            prompt += f"Thought: {next_thought}\n\n"
+
                         break
 
             # Stop when we either see the Conclusion or we cannot find an 
@@ -162,14 +168,14 @@ def generate(new_user_message, history):
             
             # Stop when we've exceeded max_actions
             if iteration >= max_actions:
-                full_response += f"Stopping after running {max_actions} actions."
+                full_response += f"<span style='color:red'>*Stopping after running {max_actions} actions.*</span>"
                 yield full_response
                 return
             else:
                 iteration += 1
     
     except Exception as e:
-        full_response += f"\nError: {e}"
+        full_response += f"\n<span style='color:red'>Error: {e}</span>"
         yield full_response
 
 
