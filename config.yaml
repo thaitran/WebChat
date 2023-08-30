@@ -1,9 +1,10 @@
 verbose: False
 
 examples:
+- Which bank offers the best savings rate?
 - Is it possible to build a room temperature superconductor?
 - Should I go to the beach in Santa Cruz tomorrow?
-- What is the cause of the conflict between Zuck and Elon?
+- Explain the conflict between Zuck and Elon
 - Summarize today's nytimes.com headlines
 
 enabled_models:
@@ -21,4 +22,4 @@ enabled_browsers:
 
 temperature: 0.1
 
-max_actions: 10
+max_actions: 5
