@@ -1,10 +1,10 @@
 import inspect
 import re
 import urllib.parse
-from bs4 import BeautifulSoup, Comment
+from bs4 import BeautifulSoup
 import requests
 from selenium import webdriver
-from math import *
+from util import safe_eval, distill_html
 
 class Tools:
     """
@@ -21,28 +21,22 @@ class Tools:
         self.add_tool(
             self.calculate,
             "Calculate",
-            "Evaluate a mathematical expression using Python.  Expression should only contain numbers, operators (+ - * / **), or math module functions.",
-            None)
+            "Evaluate a mathematical expression using Python.  Expression should only contain numbers, operators (+ - * / **), or math module functions.")
 
         self.add_tool(
             self.google_search,
             "GoogleSearch",
-            "Use Google to search the web for the topic.",
-            "I will scan the Google search results and determine whether it shows me the answer or whether I need to fetch one of the web pages for more information.")
+            "Use Google to search the web for the topic.")
 
         self.add_tool(
             self.get_web_page,
             "GetWebPage",
-            "Get the contents of a web page. Only call this with a valid URL.",
-            "I will scan the web page to determine whether it has the answer.  If not, then I will do another Google search and try loading a different web page.")
+            "Get the contents of a web page. Only call this with a valid URL.")
 
-    def add_tool(self, func, name, desc, next_thought=None):
+    def add_tool(self, func, name, desc):
         """
         Adds a Python function as an available tool for the LLM.
         The tool name and desc will be included in the LLM system message.
-        The optional next_thought is intented to be appenending to the prompt after
-        the results from the tool.  This is necessary to give more explicit
-        guidance to LLMs like LLaMA 2.
         """
         params = inspect.signature(func).parameters
         tool_params = list(params.keys())
@@ -50,8 +44,7 @@ class Tools:
         self.tools[name] = {
             "params": tool_params,
             "desc": desc,
-            "func": func,
-            "next_thought": next_thought
+            "func": func
         }
 
     def get_tool_list_for_prompt(self):
@@ -72,8 +65,7 @@ class Tools:
 
     def run_tool(self, name, params):
         """
-        Runs a tool. Returns the result of the tool and (optionally) a
-        Thought to be appened to the LLM prompt after the Results.
+        Runs a tool and returns the result.
         """
         if not name in self.tools:
             return f"{name}[] is not a valid tool"
@@ -85,7 +77,7 @@ class Tools:
 
         result = tool["func"](params)
 
-        return (result, tool["next_thought"])
+        return result
 
     def set_browser(self, browser):
         """
@@ -213,84 +205,3 @@ class Tools:
         except:
             return "Error retrieving web page"
 
-
-def safe_eval(expression):
-    """
-    A version of eval() that only allows a limited set of math functions.
-    """
-
-    safe_list = [
-        'abs', 'acos', 'asin', 'atan', 'atan2', 'ceil', 'cos', 'cosh',
-        'degrees', 'e', 'exp', 'fabs', 'floor', 'fmod', 'frexp', 'hypot',
-        'ldexp', 'log', 'log10', 'modf', 'pi', 'pow', 'radians', 'sin', 'sinh',
-        'sqrt', 'tan', 'tanh'
-    ]
-
-    safe_dict = dict([ (k, locals().get(k, None)) for k in safe_list ])
-
-    return eval(expression, { "__builtins__": None }, safe_dict)
-
-def distill_html(raw_html, remove_links=False):
-    """
-    Reduce HTML to the minimal tags necessary to understand the content.
-    Set remove_links=True to also replace <a> tags with their inner content.
-    """
-    soup = BeautifulSoup(raw_html, 'html.parser')
-
-    # Tags (with inner content) that should be completely removed from the HTML
-    # Note:  We want to keep <g-section-with-header> as it shows Top Stories
-    remove_tags = [
-        'aside', 'br', 'button', 'cite', 'cnx', 'fieldset', 'figcaption', 
-        'figure', 'footer', 'form', 'g-dropdown-button', 
-        'g-dropdown-menu-button', 'g-fab', 'g-img', 'g-inner-card', 
-        'g-left-button', 'g-link', 'g-loading-icon', 'g-more-linkg-menu-item', 
-        'g-popup', 'g-radio-button-group', 'g-right-button', 
-        'g-scrolling-carousel', 'g-snackbar', 'g-white-loading-icon',
-        'google-read-aloud-player', 'head', 'hr', 'iframe', 'img', 'input', 
-        'label', 'link', 'nav', 'next-route-announcer', 'noscript', 
-        'option', 'promo-throttler', 'script', 'select', 'style', 'svg'
-    ]
-    valid_attrs = ['href']
-
-    # Remove all unwanted tags
-    for tag in soup(remove_tags):
-        tag.decompose()
-
-    # Remove all unwanted attributes
-    for tag in soup():
-        attrs = dict(tag.attrs)
-        for attr in attrs:
-            if attr not in valid_attrs:
-                del tag[attr]
-
-    # Replace every <span> and <p> with it's inner contents
-    for span in soup.find_all(['span', 'p']):
-        span.replace_with(" " + span.text + " ")
-
-    # Replace links with plain text
-    if remove_links:
-        for link in soup.find_all('a'):
-            link.replace_with(" " + link.text + " ")
-            
-    # Remove comments
-    for comment in soup.findAll(text=lambda text: isinstance(text, Comment)):
-        comment.extract()
-
-    # Remove empty divs (e.g. <div> </div>)
-    for div in soup.find_all("div"):
-        if (div.text is None) or (div.text.strip() == ""):
-            div.decompose()
-
-    # Compress nested divs.  For example:
-    # <div><div><div>Content</div></div></div> -> <div>Content>/div>)
-    for div in soup.find_all("div"):
-        children = div.findChildren(recursive=False)
-        if len(children) == 1 and children[0].name == 'div':
-            div.replace_with(children[0])
-
-    html = str(soup)
-
-    # Compress whitespace
-    html = re.sub(r'(\s|\n)+', ' ', html)
-
-    return html

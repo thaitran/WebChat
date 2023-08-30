@@ -122,7 +122,7 @@ def generate(new_user_message, history):
                         tool = matches.group(2).strip()
                         params = matches.group(3).strip()
                         
-                        (result, next_thought) = llm_tools.run_tool(tool, params)
+                        result = llm_tools.run_tool(tool, params)
 
                         prompt = f"Question: {new_user_message}\n\n"
                         prompt += f"{full_response}\n\n"
@@ -149,11 +149,6 @@ def generate(new_user_message, history):
                             yield full_response
 
                         prompt += f"Result: {result}\n\n"
-
-                        # This is required to give more guidance on the next
-                        # step for LLMs like LLaMA 2
-                        if next_thought:
-                            prompt += f"Thought: {next_thought}\n\n"
 
                         break
 
