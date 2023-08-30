@@ -9,10 +9,10 @@ from tools import Tools
 SYSTEM_MESSAGE_TEMPLATE = "prompt.txt"
 
 MODELS = {
-    "LLaMA 2": HuggingFaceLlama2Model("meta-llama/Llama-2-70b-chat-hf", 4096),
     "GPT-3.5": OpenAIModel("gpt-3.5-turbo-16k", 16384),
     "GPT-4": OpenAIModel("gpt-4", 8192),
     "Claude 2": AnthropicModel("claude-2", 100000),
+    "Llama 2": HuggingFaceLlama2Model("meta-llama/Llama-2-70b-chat-hf", 4096),
 }
 
 # Load configuration from config.yaml.
@@ -27,6 +27,7 @@ with open("config.yaml", "r") as config_file:
     config = yaml.safe_load(config_file)
 
 verbose = config["verbose"]
+description = config["description"]
 examples = config["examples"]
 enabled_models = config["enabled_models"]
 selected_model = enabled_models[0]
@@ -183,6 +184,8 @@ if verbose:
     print(system_message)
 
 CSS = """
+h1 { text-align: center; }
+h3 { text-align: center; }
 .contain { display: flex; flex-direction: column; }
 .gradio-container { height: 100vh !important; }
 #component-0 { flex-grow: 1; overflow: auto; }
@@ -193,6 +196,7 @@ multiple_models_enabled = len(enabled_models) > 1
 multiple_browsers_enabled = len(enabled_browsers) > 1
 
 with gr.Blocks(css=CSS) as app:
+    gr.Markdown(description)
     chatinterface = gr.ChatInterface(fn=generate, examples=examples)
     chatinterface.chatbot.elem_id = "chatbot"
 

@@ -1,5 +1,8 @@
 verbose: False
 
+description: "### This is a chatbot that can access Google Search and webpages to answer questions 
+[[How it works](https://medium.com/@thait/)] [[Code](https://github.com/thaitran/WebChat)]"
+
 examples:
 - Which bank offers the best savings rate?
 - Is it possible to build a room temperature superconductor?
@@ -8,10 +11,10 @@ examples:
 - Summarize today's nytimes.com headlines
 
 enabled_models:
-- LLaMA 2
 - GPT-3.5
 - GPT-4
 - Claude 2
+- Llama 2
 
 enabled_browsers:
 - Headless
