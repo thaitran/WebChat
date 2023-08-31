@@ -3,6 +3,8 @@ This is a chatbot built using Gradio that can access Google Search and webpages 
 * Supports LLMs: [GPT-3.5](https://openai.com/blog/chatgpt), [GPT-4](https://openai.com/research/gpt-4), [Claude 2](https://www.anthropic.com/index/claude-2), [Llama 2 (70B)](https://ai.meta.com/llama/)
 * Supports browsers: Chrome, Firefox, Safari, Edge
 
+See [this article](https://medium.com/@thait/webchat-building-a-chatbot-with-access-to-a-web-browser-238602ee751f) for an overview of the implementation.
+
 ![demo](https://github.com/thaitran/WebChat/assets/432859/c6561f15-affa-4183-b07f-01d4ca22fe98)
 
 ## Installation

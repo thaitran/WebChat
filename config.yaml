@@ -1,7 +1,7 @@
 verbose: False
 
 description: "### This is a chatbot that can access Google Search and webpages to answer questions 
-[[How it works](https://medium.com/@thait/)] [[Code](https://github.com/thaitran/WebChat)]"
+[[How it works](https://medium.com/@thait/webchat-building-a-chatbot-with-access-to-a-web-browser-238602ee751f)] [[Code](https://github.com/thaitran/WebChat)]"
 
 examples:
 - Which bank offers the best savings rate?
